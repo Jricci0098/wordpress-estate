@@ -1,0 +1,87 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #f7f7f8;
+  color: #1a1a1a;
+}
+
+header {
+  background: #1d2327;
+  color: white;
+  padding: 1rem 1.5rem;
+}
+
+header h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+}
+
+nav button {
+  margin-right: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 4px;
+  background: #33404a;
+  color: white;
+  cursor: pointer;
+}
+
+nav button.active {
+  background: #2271b1;
+}
+
+.export-link {
+  color: #a7d1f4;
+  margin-left: 1rem;
+}
+
+main {
+  padding: 1.5rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  background: white;
+}
+
+th,
+td {
+  border: 1px solid #ddd;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+th {
+  background: #eee;
+}
+
+.cards {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.card {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 1rem 1.5rem;
+  text-align: center;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.disclaimer {
+  color: #555;
+  font-size: 0.85rem;
+  max-width: 60ch;
+}
+
+[role="alert"] {
+  color: #b32d2e;
+}

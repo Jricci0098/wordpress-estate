@@ -1,0 +1,186 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wordpress_estate}
+      POSTGRES_USER: ${POSTGRES_USER:-estate}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-estate-dev-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-estate}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Not published to the host: only backend/worker need it, over the
+    # internal compose network.
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Not published to the host.
+
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-mariadb-root-dev-password}
+      MARIADB_DATABASE: wp1
+      MARIADB_USER: ${WORDPRESS_DB_USER:-wpuser}
+      MARIADB_PASSWORD: ${WORDPRESS_DB_PASSWORD:-wpuser-dev-password}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./docker/mariadb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      # MariaDB 11 removed the legacy mysqladmin binary. The official image
+      # ships healthcheck.sh specifically for container readiness checks.
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Not published to the host: only the WordPress containers need it.
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-estate}:${POSTGRES_PASSWORD:-estate-dev-password}@postgres:5432/${POSTGRES_DB:-wordpress_estate}
+      SEED_AGENT_ID: ${SEED_AGENT_ID:-agent-demo}
+      SEED_AGENT_SECRET: ${SEED_AGENT_SECRET:-demo-agent-secret-change-me}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
+    ports:
+      # 8001 avoids the commonly occupied local development port 8000.
+      - "127.0.0.1:${BACKEND_PORT:-8001}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./worker
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      redis:
+        condition: service_healthy
+    # No published ports: this is a background queue consumer only.
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8001}
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:8080"
+    depends_on:
+      - backend
+
+  wp1:
+    image: wordpress:6.6-php8.3-apache
+    environment: &wp_common_env
+      WORDPRESS_DB_HOST: mariadb
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER:-wpuser}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD:-wpuser-dev-password}
+      WORDPRESS_TABLE_PREFIX: wp_
+      WORDPRESS_DB_NAME: wp1
+    ports:
+      - "127.0.0.1:${WP1_PORT:-8181}:80"
+    volumes:
+      - wp1_data:/var/www/html
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  wp2:
+    image: wordpress:6.6-php8.3-apache
+    environment:
+      <<: *wp_common_env
+      WORDPRESS_DB_NAME: wp2
+    ports:
+      - "127.0.0.1:${WP2_PORT:-8182}:80"
+    volumes:
+      - wp2_data:/var/www/html
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  wp3:
+    image: wordpress:6.6-php8.3-apache
+    environment:
+      <<: *wp_common_env
+      WORDPRESS_DB_NAME: wp3
+    ports:
+      - "127.0.0.1:${WP3_PORT:-8183}:80"
+    volumes:
+      - wp3_data:/var/www/html
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  wp4:
+    image: wordpress:6.6-php8.3-apache
+    environment:
+      <<: *wp_common_env
+      WORDPRESS_DB_NAME: wp4
+    ports:
+      - "127.0.0.1:${WP4_PORT:-8184}:80"
+    volumes:
+      - wp4_data:/var/www/html
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  wp5:
+    image: wordpress:6.6-php8.3-apache
+    environment:
+      <<: *wp_common_env
+      WORDPRESS_DB_NAME: wp5
+    ports:
+      - "127.0.0.1:${WP5_PORT:-8185}:80"
+    volumes:
+      - wp5_data:/var/www/html
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  wp-bootstrap:
+    image: wordpress:cli-php8.3
+    user: root
+    entrypoint: ["sh", "/bootstrap.sh"]
+    environment:
+      WP_ADMIN_USER: ${WP_ADMIN_USER:-admin}
+      WP_ADMIN_PASSWORD: ${WP_ADMIN_PASSWORD:-AdminDemo123!}
+      WP_ADMIN_EMAIL: ${WP_ADMIN_EMAIL:-admin@example.local}
+      WP_PORT_BASE: ${WP_PORT_BASE:-8180}
+      # wp-config.php reads these variables at runtime. The CLI bootstrap
+      # container must receive them just like the Apache containers do.
+      WORDPRESS_DB_HOST: mariadb
+      WORDPRESS_DB_USER: ${WORDPRESS_DB_USER:-wpuser}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD:-wpuser-dev-password}
+    volumes:
+      - wp1_data:/var/www/wp1
+      - wp2_data:/var/www/wp2
+      - wp3_data:/var/www/wp3
+      - wp4_data:/var/www/wp4
+      - wp5_data:/var/www/wp5
+      - ./docker/wordpress/bootstrap.sh:/bootstrap.sh:ro
+      - ./docker/wordpress/demo-plugins:/demo-plugins:ro
+    depends_on:
+      - wp1
+      - wp2
+      - wp3
+      - wp4
+      - wp5
+    restart: "no"
+
+volumes:
+  postgres_data:
+  mariadb_data:
+  wp1_data:
+  wp2_data:
+  wp3_data:
+  wp4_data:
+  wp5_data:
